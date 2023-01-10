@@ -1,12 +1,52 @@
 import dash
-from dash import html,Output,Input,State,dcc
+from dash import html,Output,Input,State,dcc,ctx
 import dash_bootstrap_components as dbc
 
 #external_stylesheets = ["/workspaces/MyPortfolioTracker/project/pages/style.css"]
 
+
+from Joueur import Joueur
+
 external_stylesheets=[dbc.themes.SPACELAB]
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+
+app.index_string = '''<!DOCTYPE html>
+<html>
+<head>
+<title>My Game</title>
+<link rel="manifest" href="./assets/manifest.json" />
+{%metas%}
+{%favicon%}
+{%css%}
+</head>
+<script type="module">
+   import 'https://cdn.jsdelivr.net/npm/@pwabuilder/pwaupdate';
+   const el = document.createElement('pwa-update');
+   document.body.appendChild(el);
+</script>
+<body>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', ()=> {
+      navigator
+      .serviceWorker
+      .register('./assets/sw01.js')
+      .then(()=>console.log("Ready."))
+      .catch(()=>console.log("Err..."));
+    });
+  }
+</script>
+{%app_entry%}
+<footer>
+{%config%}
+{%scripts%}
+{%renderer%}
+</footer>
+</body>
+</html>
+'''
+
 server = app.server
 
 Menu = html.Div(
@@ -29,7 +69,7 @@ navbar = dbc.Navbar(
 
 button = html.Div(
     [
-        dbc.Button("Start Game",id = 'start-game',type = 'submit',color="primary"),
+        dbc.Button("Show Final Rules",id = 'start-game',type = 'submit',color="primary"),
     ],
     className="d-grid gap-2 col-4 mx-auto",
 )
@@ -81,8 +121,10 @@ regles = html.Div(
     className="d-grid gap-2 col-4 mx-auto",
 )
 
+
 global joueurs 
 joueurs = []
+    
 
 list_joueurs = html.Div(
     [
@@ -112,6 +154,66 @@ joueur_input = html.Div(
     className="d-grid gap-2 col-4 mx-auto",
 )
 
+popup_bouton = html.Div(
+    [
+        dbc.Button("Start", id="open-game"),
+    ],
+    className="d-grid gap-2 col-4 mx-auto",
+)
+
+###########
+from random import shuffle,random
+from random import seed
+seed(1)
+r = random()
+#joueurs = random.shuffle(joueurs, lambda: r)
+############
+
+
+popup = html.Div(
+    [
+        dbc.Modal(
+            [
+                dbc.ModalHeader(dbc.ModalTitle("Your Turn")),
+                list_joueurs,
+                html.Div([
+                dbc.Button('Joueur 1', id='btn-nclicks-1'),
+                dbc.Button('Joueur 2', id='btn-nclicks-2'),
+                ],className="d-grid gap-2 col-2 mx-auto"),
+                html.Div(id='joueur-choisi',className="d-grid gap-2 col-4 mx-auto"),
+                dcc.Markdown(children=space),
+                html.Div(id ='popup-defi', className="d-grid gap-2 col-4 mx-auto"),
+                dcc.Markdown(children=space),
+            ],
+            id="popup",
+            fullscreen=True,
+            is_open = False
+        ),
+    ]
+)
+"""
+popup = html.Div(
+    [
+        dbc.Modal(
+            [
+                dbc.ModalHeader(dbc.ModalTitle("Your Turn")),
+                html.Div(
+                [
+                dcc.Markdown(children='Leo'),
+                dbc.Button("Voir Defi", id="voir-defi"),
+                ],
+                className="d-grid gap-2 col-4 mx-auto"),
+                html.Div(
+                id = 'popup-defi',
+                className="d-grid gap-2 col-4 mx-auto"),
+            ],
+            id="popup",
+            fullscreen=True,
+            is_open = False
+        ),
+    ]
+)
+"""
 app.layout = dbc.Container([
     dbc.Row(
         [
@@ -132,12 +234,16 @@ app.layout = dbc.Container([
         button_add,
         button_drop,
         dcc.Markdown(children=space),
-        list_joueurs,
+        #list_joueurs,
         dcc.Markdown(children=space),
         dcc.Markdown(children=space),
         button,
         dcc.Markdown(children=space),
         regles,
+        dcc.Markdown(children=space),
+        popup_bouton,
+        html.Div(id = 'btn-joueur'),
+        popup,
         dash.page_container
         ], align='center',className="g-0",
     )
@@ -155,8 +261,10 @@ def update_output(clicks,input1, input2):
     if clicks is not None:
 
         str_joueurs = ''
+        numero = 1
         for j in joueurs:
-            str_joueurs = str_joueurs +'\n -  '+j
+            str_joueurs = str_joueurs +'\n - Joueur '+str(numero)+' : '+j.nom
+            numero+=1
 
         return u'''
         Un Defi sera lancé toutes les {} {},\n
@@ -170,16 +278,74 @@ def update_output(clicks,input1, input2):
     [Input('drop','n_clicks'),Input('add','n_clicks')],
     [State("joueur-input", "value")]
 )
-def update_output2(click_drop,click_add,name):
+def update_output2(click_drop,click_add,nom):
+
     if click_drop is not None:
-        joueurs.remove(name)
+        for j in joueurs:
+            if j.nom == nom:
+                joueurs.remove(j)
     elif click_add is not None:
-        joueurs.append(name)
+        joueurs.append(Joueur(nom,0,any,any))
     
-    str = ''
+    str_joueurs = ''
+    numero = 1
     for j in joueurs:
-        str= str+'\n -  '+j
-    return str
+        str_joueurs = str_joueurs +'\n - Joueur '+str(numero)+' : '+j.nom
+        numero+=1
+
+    return str_joueurs
+
+###############
+
+@app.callback(
+    Output("popup", "is_open"),
+    [Input("open-game", "n_clicks")],
+    State("popup", "is_open"),
+)
+def toggle_modal(n, is_open=False): 
+    if n:
+        return not is_open
+    else : return is_open
+
+@app.callback(
+    [Output("popup-defi", "children")],
+    Input("voir-defi", "n_clicks"),
+)
+def update_output3(click):
+    if click is not None:
+
+        defi = 'Le defi est de realiser une montage de chaises'
+        str = html.Div(
+                [
+                dcc.Markdown(children=space),
+                dcc.Markdown(children=defi),
+                dcc.Markdown(children=space),
+                dbc.Button("Joueur Suivant", id="open-game"),
+                ],
+                className="d-grid gap-2 col-4 mx-auto"),      
+        return str
+
+@app.callback(
+    Output('joueur-choisi', 'children'),
+    Input('btn-nclicks-1', 'n_clicks'),
+    Input('btn-nclicks-2', 'n_clicks'),
+)
+def displayClick(btn1, btn2):
+
+    #choix du defi et selection du defi dans la BDD
+
+    if "btn-nclicks-1" == ctx.triggered_id:
+        return html.Div(
+                [
+                    dcc.Markdown(children=space),
+                    dcc.Markdown(children='premier defi random')],
+                className="d-grid gap-2 col-4 mx-auto"),
+
+    elif "btn-nclicks-2" == ctx.triggered_id:
+        return html.Div(
+                [   dcc.Markdown(children=space),
+                    dcc.Markdown(children='deuxieme defi random')],
+                className="d-grid gap-2 col-4 mx-auto"),
 
 
 if __name__ == "__main__":
